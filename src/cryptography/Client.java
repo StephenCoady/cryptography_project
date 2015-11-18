@@ -1,5 +1,4 @@
 package cryptography;
-
 import java.io.*;
 import java.nio.file.Files;
 import java.security.*;
@@ -110,15 +109,6 @@ public class Client{
 			byte [] finalMessage = new byte[this.messageBytes.length+sessionBytes.length];
 
 			byte outputHash[] = md.digest(finalMessage);
-
-			// StringBuffer hexString = new StringBuffer();
-			// for (int i=0;i<outputHash.length;i++) {
-			// 	hexString.append(Integer.toHexString(0xF & outputHash[i]>>4));
-			// 	hexString.append(Integer.toHexString(0xF & outputHash[i]));
-			// 	hexString.append (" ");
-			// }
-			// System.out.println ("Hash value: " + hexString.toString());
-
 			return outputHash;
 		}
 
