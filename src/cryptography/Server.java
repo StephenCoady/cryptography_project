@@ -1,14 +1,11 @@
 package cryptography;
 
 import java.io.*;
-import java.nio.file.Files;
 import java.security.*;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Scanner;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -17,15 +14,9 @@ import javax.crypto.spec.SecretKeySpec;
 public class Server{
 
 	private SecretKey sessionKey;
-	private StringBuffer message;
+	private String message;
+	private byte[] hash;
 	
-	public Server(){
-	}
-	
-	public static void main(String [ ] args){
-		//THIS IS NEW
-	}
-
 
 	public void newKey(){
 		try
@@ -45,6 +36,8 @@ public class Server{
 			privateKeyOOS.writeObject(keyPair.getPrivate());
 			publicKeyOOS.writeObject(keyPair.getPublic());
 
+			privateKeyOOS.close();
+			publicKeyOOS.close();
 		}
 		catch (Exception e)
 		{
@@ -52,33 +45,10 @@ public class Server{
 		}
 	}
 
-	//	public void decryptMessage(){
-	//		//start decrypt
-	//	      byte[] iv = new byte[] {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
-	//        IvParameterSpec ips = new IvParameterSpec(iv);
-	//
-	//       // Create AES cipher instance
-	//        Cipher aesCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-	//        
-	//        // Initialize the cipher for decryption
-	//        aesCipher.init(Cipher.DECRYPT_MODE, key, ips);
-	//        
-	//        // Read ciphertext from file and decrypt it
-	//        FileInputStream fis = new FileInputStream("scrambled");
-	//        BufferedInputStream bis = new BufferedInputStream(fis);
-	//        CipherInputStream cis = new CipherInputStream(bis, aesCipher);
-	//        
-	//        StringBuffer plaintext = new StringBuffer();
-	//        int c;
-	//        while ((c = cis.read()) != -1)
-	//            plaintext.append((char) c);
-	//        cis.close();
-	//        bis.close();
-	//        fis.close();
-	//        
-	//        System.out.println("Plaintext: " + plaintext.toString());
-	//	}
-
+	public SecretKey getSessionKey(){
+		return this.sessionKey;
+	}
+	
 	public void decryptSessionKey(byte[] encryptedSessionKey){
 
 		try
@@ -99,33 +69,8 @@ public class Server{
 			
 			this.sessionKey = new SecretKeySpec (rsaCipher.doFinal(encryptedSessionKey), "AES");
 
-			String keys = Base64.getEncoder().encodeToString(this.sessionKey.getEncoded());
-			System.out.println("Encoding on server side: "+keys);
-
-			//start decrypt
-			byte[] iv = new byte[] {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
-			IvParameterSpec ips = new IvParameterSpec(iv);
-
-			// Create AES cipher instance
-			Cipher aesCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-
-			// Initialize the cipher for decryption
-			aesCipher.init(Cipher.DECRYPT_MODE, this.sessionKey, ips);
-
-			// Read ciphertext from file and decrypt it
-			FileInputStream fis = new FileInputStream("scrambled");
-			BufferedInputStream bis = new BufferedInputStream(fis);
-			CipherInputStream cis = new CipherInputStream(bis, aesCipher);
-
-			StringBuffer plaintext = new StringBuffer();
-			int c;
-			while ((c = cis.read()) != -1)
-				plaintext.append((char) c);
-			cis.close();
-			bis.close();
-			fis.close();
-			this.message = plaintext;
-			System.out.println("Plaintext: " + plaintext.toString());
+//			String keys = Base64.getEncoder().encodeToString(this.sessionKey.getEncoded());
+//			System.out.println("Encoding on server side: "+keys);
 
 
 		}
@@ -136,24 +81,46 @@ public class Server{
 
 	}
 
-	public void hashMessage(byte[] hash) throws NoSuchAlgorithmException{
+	public void decryptMessage() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IOException{
+		//start decrypt
+		byte[] iv = new byte[] {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+		IvParameterSpec ips = new IvParameterSpec(iv);
+
+		// Create AES cipher instance
+		Cipher aesCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+
+		// Initialize the cipher for decryption
+		aesCipher.init(Cipher.DECRYPT_MODE, this.sessionKey, ips);
+
+		// Read ciphertext from file and decrypt it
+		FileInputStream fis = new FileInputStream("scrambled");
+		BufferedInputStream bis = new BufferedInputStream(fis);
+		CipherInputStream cis = new CipherInputStream(bis, aesCipher);
+
+		StringBuffer plaintext = new StringBuffer();
+		int c;
+		while ((c = cis.read()) != -1)
+			plaintext.append((char) c);
+		cis.close();
+		bis.close();
+		fis.close();
+		this.message = plaintext.toString();
+	}
+	
+	public String getMessage(){
+		return this.message;
+	}
+	
+	public void hashMessage() throws NoSuchAlgorithmException{
 		MessageDigest md = MessageDigest.getInstance("SHA-256");
 		
 		byte [] sessionBytes = this.sessionKey.getEncoded();
-		byte [] finalMessage = new byte[this.message.toString().getBytes().length+sessionBytes.length];
+		byte [] finalMessage = new byte[this.message.getBytes().length+sessionBytes.length];
 		
-		byte outputHash[] = md.digest(finalMessage);
-		
-		boolean retVal = Arrays.equals(outputHash, hash);
-		System.out.println(retVal);
-
-		StringBuffer hexString = new StringBuffer();
-	      for (int i=0;i<outputHash.length;i++) {
-	          hexString.append(Integer.toHexString(0xF & outputHash[i]>>4));
-	          hexString.append(Integer.toHexString(0xF & outputHash[i]));
-	         hexString.append (" ");
-	      }
-	      System.out.println ("Hash value: " + hexString.toString());
-	   
+		this.hash = md.digest(finalMessage); 
+	}
+	
+	public byte[] getHash(){
+		return this.hash;
 	}
 }
