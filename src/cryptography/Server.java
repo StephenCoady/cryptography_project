@@ -120,7 +120,7 @@ public class Server{
 		this.hash = md.digest(finalMessage); 
 	}
 	
-	public byte[] getHash(){
+	public byte[] getHashValue(){
 		return this.hash;
 	}
 }
