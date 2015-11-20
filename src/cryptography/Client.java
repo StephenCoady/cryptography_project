@@ -1,121 +1,102 @@
 package cryptography;
-
 import java.io.*;
 import java.security.*;
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.CipherInputStream;
+import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 
-public class Server{
+public class Client{
 
+	private byte[] messageBytes;
 	private SecretKey sessionKey;
-	private String message;
+	private byte[] encryptedSessionKey;
 	private byte[] hash;
-	
 
-	public void newKey(){
-		try
-		{
-			// Generate RSA key pair
-			KeyPair keyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
 
-			// File for writing private key
-			FileOutputStream privateKeyFOS = new FileOutputStream("private key");
-			ObjectOutputStream privateKeyOOS = new ObjectOutputStream(privateKeyFOS);
 
-			// File for writing publickey
-			FileOutputStream publicKeyFOS = new FileOutputStream("public key");
-			ObjectOutputStream publicKeyOOS = new ObjectOutputStream(publicKeyFOS);
+	public void generateSessionKey() throws NoSuchAlgorithmException, IOException{
+		int numBytes = 16;
 
-			// Write the keys to respective files
-			privateKeyOOS.writeObject(keyPair.getPrivate());
-			publicKeyOOS.writeObject(keyPair.getPublic());
+		SecureRandom sRandom = SecureRandom.getInstance("SHA1PRNG");
 
-			privateKeyOOS.close();
-			publicKeyOOS.close();
-		}
-		catch (Exception e)
-		{
-			System.out.println(e);
-		}
+		byte [] sessionKeyBytes = new byte[numBytes];
+		sRandom.nextBytes(sessionKeyBytes);
+
+		SecretKey sessionKey = new SecretKeySpec(sessionKeyBytes, "AES");
+		//		String key = Base64.getEncoder().encodeToString(sessionKey.getEncoded());
+		//		System.out.println("Encoding from client side: "+key);
+		this.sessionKey = sessionKey;
 	}
 
 	public SecretKey getSessionKey(){
-		return this.sessionKey;
-	}
-	
-	public void decryptSessionKey(byte[] encryptedSessionKey){
-
-		try
-		{
-			// File containing RSA private key
-			FileInputStream keyFIS = new FileInputStream("private key");
-			ObjectInputStream keyOIS = new ObjectInputStream(keyFIS);
-
-			// Create RSA cipher instance
-			Cipher rsaCipher = Cipher.getInstance("RSA");
-
-			// Initialize the cipher for decryption
-			rsaCipher.init(Cipher.DECRYPT_MODE, (PrivateKey) keyOIS.readObject());
-
-			keyOIS.close();
-			keyFIS.close();
-
-			
-			this.sessionKey = new SecretKeySpec (rsaCipher.doFinal(encryptedSessionKey), "AES");
-
-//			String keys = Base64.getEncoder().encodeToString(this.sessionKey.getEncoded());
-//			System.out.println("Encoding on server side: "+keys);
-
-
-		}
-		catch (Exception e)
-		{
-			System.out.println(e);
-		}
-
+		return sessionKey;
 	}
 
-	public void decryptMessage() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IOException{
-		//start decrypt
-		byte[] iv = new byte[] {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+	public void encryptSessionKey(SecretKey sessionKey) throws IllegalBlockSizeException, BadPaddingException, InvalidKeyException, ClassNotFoundException, IOException, NoSuchAlgorithmException, NoSuchPaddingException{
+
+		FileInputStream keyFIS = new FileInputStream("public key");
+		ObjectInputStream keyOIS = new ObjectInputStream(keyFIS);
+
+		Cipher cipher = Cipher.getInstance("RSA");
+
+		// Initialize the cipher for encryption
+		cipher.init(Cipher.ENCRYPT_MODE, (PublicKey) keyOIS.readObject());
+
+		keyOIS.close();
+		keyFIS.close();
+
+		byte[] ciphertext = cipher.doFinal(sessionKey.getEncoded());
+
+
+		this.encryptedSessionKey = ciphertext;
+	}
+
+	public byte[] getEncryptedSessionKey(){
+		return this.encryptedSessionKey;
+	}
+
+	public void encryptMessage(SecretKey sessionKey, String message) throws IllegalBlockSizeException, BadPaddingException, IOException, ClassNotFoundException, NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException{
+
+		// set IV (required for CBC)
+		byte[] iv ={0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
+				0x00,0x00,0x00,0x00,0x00};
 		IvParameterSpec ips = new IvParameterSpec(iv);
-
 		// Create AES cipher instance
 		Cipher aesCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		// Initialize the cipher for encryption
+		aesCipher.init(Cipher.ENCRYPT_MODE, sessionKey, ips);
 
-		// Initialize the cipher for decryption
-		aesCipher.init(Cipher.DECRYPT_MODE, this.sessionKey, ips);
+		// File for writing output
+		FileOutputStream fos = new FileOutputStream("scrambled");
+		// Read first command-line arg into a buffer.
+		// This is the messge to be encrypted
+		byte plaintext[] = messageToBytes(message);
 
-		// Read ciphertext from file and decrypt it
-		FileInputStream fis = new FileInputStream("scrambled");
-		BufferedInputStream bis = new BufferedInputStream(fis);
-		CipherInputStream cis = new CipherInputStream(bis, aesCipher);
+		// Encrypt the plaintext
+		byte[] ciphertext = aesCipher.doFinal(plaintext);
 
-		StringBuffer plaintext = new StringBuffer();
-		int c;
-		while ((c = cis.read()) != -1)
-			plaintext.append((char) c);
-		cis.close();
-		bis.close();
-		fis.close();
-		this.message = plaintext.toString();
+		// Write ciphertext to file
+		fos.write(ciphertext);
+		fos.close();
 	}
-	
-	public String getMessage(){
-		return this.message;
+
+	public byte[] messageToBytes(String message){
+
+		byte[] plaintext = message.getBytes();
+		return this.messageBytes = plaintext;
 	}
-	
+
 	public void hashMessage() throws NoSuchAlgorithmException{
 		MessageDigest md = MessageDigest.getInstance("SHA-256");
 		
 		byte [] sessionBytes = this.sessionKey.getEncoded();
-		byte [] finalMessage = new byte[this.message.getBytes().length+sessionBytes.length];
+		byte [] finalMessage = new byte[this.messageBytes.length+sessionBytes.length];
 		
 		this.hash = md.digest(finalMessage); 
 	}
