@@ -1,15 +1,27 @@
-package cryptography;
+
 import java.io.*;
 import java.security.*;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+/*
+ * By Stephen Coady (20064122) & Colum Foskin (20062042)
+ * 
+ * Assignment - Client-Server security handshake
+ * Lecturer - Jimmy McGibney
+ * Module - Applied Cryptography
+ *
+ *
+ * A client model. Used to generate a session key.
+ * Can encrypt and decrypt messages
+ */
 
 public class Client{
 
@@ -17,6 +29,7 @@ public class Client{
 	private SecretKey sessionKey;
 	private byte[] encryptedSessionKey;
 	private byte[] hash;
+	private String message;
 
 
 
@@ -85,20 +98,65 @@ public class Client{
 		fos.write(ciphertext);
 		fos.close();
 	}
+	
+	public void decryptMessage() throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IOException{
+		//start decrypt
+		byte[] iv = new byte[] {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+		IvParameterSpec ips = new IvParameterSpec(iv);
 
+		// Create AES cipher instance
+		Cipher aesCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+
+		// Initialize the cipher for decryption
+		aesCipher.init(Cipher.DECRYPT_MODE, this.sessionKey, ips);
+
+		// Read ciphertext from file and decrypt it
+		FileInputStream fis = new FileInputStream("scrambledFromServer");
+		BufferedInputStream bis = new BufferedInputStream(fis);
+		CipherInputStream cis = new CipherInputStream(bis, aesCipher);
+
+		StringBuffer plaintext = new StringBuffer();
+		int c;
+		while ((c = cis.read()) != -1)
+			plaintext.append((char) c);
+		cis.close();
+		bis.close();
+		fis.close();
+		this.message = plaintext.toString();
+	}
+	
+	public String getMessage(){
+		return this.message;
+	}
+
+	/*
+	 * convert message to bytes for ease of use
+	 */
 	public byte[] messageToBytes(String message){
 
 		byte[] plaintext = message.getBytes();
 		return this.messageBytes = plaintext;
 	}
 
+	/*
+	 * hash the message so that the server can compare to the client's hash.
+	 * this method takes the bytes of the message and combines it with the bytes of the AES key
+	 * which is then hashed. this hashed is compared (by the engine) to verify they match. thus 
+	 * that the client are who they say they are
+	 */
+	
 	public void hashMessage() throws NoSuchAlgorithmException{
 		MessageDigest md = MessageDigest.getInstance("SHA-256");
-		
+
 		byte [] sessionBytes = this.sessionKey.getEncoded();
 		byte [] finalMessage = new byte[this.messageBytes.length+sessionBytes.length];
+
+		for (int i = 0; i < finalMessage.length; ++i)
+		{
+		    finalMessage[i] = i < messageBytes.length ? messageBytes[i] : sessionBytes[i - messageBytes.length];
+		}
 		
-		this.hash = md.digest(finalMessage); 
+		this.hash = md.digest(finalMessage);  
 	}
 	
 	public byte[] getHashValue(){
