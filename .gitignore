@@ -1,1 +1,9 @@
+.project
+clientAESKey
+encrypted_session_key
+"private key"
+"public key"
+scrambled
+scrambledFromServer
+
 /bin
