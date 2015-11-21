@@ -1,3 +1,4 @@
+/.settings
 .project
 clientAESKey
 encrypted_session_key
