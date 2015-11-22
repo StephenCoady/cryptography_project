@@ -26,6 +26,7 @@ public class Engine {
 	private Client client;
 	private Server server;
 	private String message;
+	final protected static char[] hexArray = "0123456789ABCDEF".toCharArray();
 
 	public Engine() throws InvalidKeyException, NoSuchAlgorithmException, IllegalBlockSizeException, BadPaddingException, ClassNotFoundException, NoSuchPaddingException, InvalidAlgorithmParameterException, IOException{
 		client = new Client();
@@ -92,6 +93,7 @@ public class Engine {
 							System.out.println("Encrypting ...\n");
 							Thread.sleep(3000);
 							System.out.println("Sent!\n");
+							server.decryptMessage();
 						}catch (Exception e){
 							System.out.println("Something broke. Please try again. Did you initiate a conversation?");
 						}
@@ -154,8 +156,13 @@ public class Engine {
 						try{
 							client.hashMessage();
 							server.hashMessage();
+							System.out.println("Sent from client: "+bytesToHex(client.getHashValue()));
+							System.out.println("Hashed this side: "+bytesToHex(server.getHashValue()));
 							if(Arrays.equals(server.getHashValue(), client.getHashValue())){
 								System.out.println("Hash values match! Client is authenticated.");
+							}
+							else{
+								System.out.println("Hash values do not match, don't trust sender!");
 							}
 						}catch (Exception e){
 							System.out.println("Oops, something went wrong. Are you sure the client sent a message? Maybe try to send one from the client first.");
@@ -228,5 +235,15 @@ public class Engine {
 		Scanner sc = new Scanner(System.in);
 		String message = sc.nextLine();
 		return message;
+	}
+	
+	public static String bytesToHex(byte[] bytes) {
+	    char[] hexChars = new char[bytes.length * 2];
+	    for ( int j = 0; j < bytes.length; j++ ) {
+	        int v = bytes[j] & 0xFF;
+	        hexChars[j * 2] = hexArray[v >>> 4];
+	        hexChars[j * 2 + 1] = hexArray[v & 0x0F];
+	    }
+	    return new String(hexChars);
 	}
 }
